@@ -169,7 +169,9 @@ async def main():
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                "SELECT id FROM fixtures WHERE status_short IN ('FT','AET','PEN','AWD','WO') AND sub_data_synced = 0 ORDER BY id"
+                # id > 0 排除外部数据源（football-data.co.uk / Understat）建的负数合成 ID，
+                # 它们在 API-Football 里不存在，否则会持续空耗配额
+                "SELECT id FROM fixtures WHERE id > 0 AND status_short IN ('FT','AET','PEN','AWD','WO') AND sub_data_synced = 0 ORDER BY id"
             )
             ids = [row[0] for row in await cur.fetchall()]
 

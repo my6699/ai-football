@@ -286,6 +286,12 @@ DB_NAME=football
 API_FOOTBALL_KEY=
 API_FOOTBALL_BASE_URL=
 
+# football-data.co.uk 免费 CSV 数据源（无需 key，保留默认值即可）
+FOOTBALL_DATA_BASE_URL=https://www.football-data.co.uk/mmz4281
+
+# Understat 真实 xG 数据源（无需 key，保留默认值即可）
+UNDERSTAT_BASE_URL=https://understat.com/getLeagueData
+
 DEEPSEEK_API_KEY=
 DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
 DEEPSEEK_MODEL=deepseek-chat
@@ -300,6 +306,8 @@ CACHE_TTL=3600
 | `DB_NAME` | 数据库名称 |
 | `API_FOOTBALL_KEY` | API-Football Key |
 | `API_FOOTBALL_BASE_URL` | API-Football 地址，请自行配置 |
+| `FOOTBALL_DATA_BASE_URL` | football-data.co.uk CSV 地址（免费、无需 key） |
+| `UNDERSTAT_BASE_URL` | Understat xG 接口地址（免费、无需 key） |
 | `DEEPSEEK_API_KEY` | DeepSeek API Key |
 | `DEEPSEEK_BASE_URL` | DeepSeek API 地址 |
 | `DEEPSEEK_MODEL` | LLM 模型名称 |
@@ -349,6 +357,9 @@ CACHE_TTL=3600
 | `standing_sync` | 同步积分榜 |
 | `fixture_daily` | 同步赛程 |
 | `fixture_live` | 同步实时赛况 |
+| `football_data_backfill` | 从 football-data.co.uk 回填历史比赛与统计（免费） |
+| `understat_sync` | 从 Understat 回填真实 xG（免费） |
+| `injury_sync` | 同步伤停数据 |
 | `auto_predict` | 自动预测 |
 | `backfill_pred` | 回填预测结果 |
 
@@ -390,8 +401,40 @@ curl -X POST http://127.0.0.1:8000/api/scheduler/backfill_pred/trigger
 |------|------|
 | `python tools/manual_predict.py` | 交互式手动预测 |
 | `python tools/batch_predict.py` | 批量预测 |
+| `python tools/sync_football_data.py` | 从 football-data.co.uk 回填历史数据（免费，`--dry-run` 可预览） |
+| `python tools/sync_understat.py` | 从 Understat 回填真实 xG（免费，`--leagues`/`--dry-run`） |
+| `python tools/sync_injuries.py` | 同步伤停数据（`--date` 或 `--fixtures` 精确拉取） |
 | `python prediction/features.py` | 重新生成特征 |
 | `python prediction/train.py` | 重新训练模型 |
+
+## 数据源
+
+本项目支持三个数据源，详细说明见 [`backend/docs/DATA_SOURCES.md`](backend/docs/DATA_SOURCES.md)。
+
+| 数据源 | 需要 key | 覆盖联赛 | 提供内容 |
+|------|------|------|------|
+| **API-Football** | 是（100 次/天） | 全部已启用联赛 | 赛程、比分、统计（控球率/传球成功率）、积分榜、阵容、事件、赔率、伤停 |
+| **football-data.co.uk** | **否** | 英/苏/五大联赛 | 比分、半场比分、射门、射正、角球、犯规、赔率 |
+| **Understat** | **否** | 五大联赛 | **真实 xG** |
+
+三者分工：**历史批量回填用 football-data.co.uk（免费无限），真实 xG 用 Understat
+（免费无限），API-Football 只补它们拿不到的控球率、传球成功率、积分榜和伤停**，
+这样能把 API-Football 的每日配额省下来。
+
+三个数据源共用同一套队名解析与 fixture 匹配逻辑
+（[`backend/app/services/fixture_matching.py`](backend/app/services/fixture_matching.py)），
+因此 Understat 的 xG 会挂到 football-data.co.uk 已建好的那场比赛上，**不会重复建场**，
+两个任务的执行顺序也无关紧要。
+
+```bash
+cd backend
+# 回填历史比赛与统计（免费）
+python tools/sync_football_data.py --seasons 2023 2024 2025
+# 回填真实 xG（免费）
+python tools/sync_understat.py --seasons 2023 2024 2025
+# 新增的 injuries 表需要先迁移
+alembic upgrade head
+```
 
 ## 预测结果结构
 

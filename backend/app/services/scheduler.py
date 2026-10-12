@@ -10,6 +10,9 @@ from app.services.team_service import sync_teams
 from app.services.player_service import sync_players
 from app.services.standing_service import sync_standings
 from app.services.fixture_service import sync_fixtures, sync_live_fixtures
+from app.services.football_data_service import sync_football_data
+from app.services.understat_service import sync_understat
+from app.services.injury_service import sync_injuries
 from app.services.prediction_result_service import backfill_results
 from app.services.auto_predict_service import auto_predict
 
@@ -22,6 +25,10 @@ _DEFAULT_TASKS = {
     "player_sync":    {"name": "球员数据同步",   "start_hour": 3,   "fn": sync_players},
     "standing_sync":  {"name": "积分榜数据同步", "start_hour": 4,   "fn": sync_standings},
     "fixture_daily":  {"name": "赛程每日同步",   "start_hour": 5,   "fn": sync_fixtures},
+    "football_data_backfill": {"name": "football-data.co.uk 回填", "start_hour": 5.5,
+                               "fn": sync_football_data},
+    "understat_sync": {"name": "Understat xG 回填", "start_hour": 6, "fn": sync_understat},
+    "injury_sync":    {"name": "伤停数据同步",   "start_hour": 11.5, "fn": sync_injuries},
     "fixture_live":   {"name": "赛程实时同步",   "start_hour": None, "fn": sync_live_fixtures,
                        "interval_seconds": LIVE_INTERVAL_SECONDS},
     "backfill_pred":  {"name": "预测结果回填",   "start_hour": None, "fn": backfill_results,

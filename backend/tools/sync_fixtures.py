@@ -11,6 +11,8 @@ def count_remaining():
     try:
         finished = {"FT", "AET", "PEN", "AWD", "WO"}
         return db.query(Fixture).filter(
+            # 排除外部数据源建的负数合成 ID（API-Football 里不存在，否则死循环）
+            Fixture.id > 0,
             Fixture.status_short.in_(finished),
             Fixture.sub_data_synced == False,
         ).count()
@@ -22,8 +24,8 @@ started = datetime.now()
 # 初始状态
 finished = {"FT", "AET", "PEN", "AWD", "WO"}
 db = SessionLocal()
-total = db.query(Fixture).filter(Fixture.status_short.in_(finished)).count()
-done = db.query(Fixture).filter(Fixture.status_short.in_(finished), Fixture.sub_data_synced == True).count()
+total = db.query(Fixture).filter(Fixture.id > 0, Fixture.status_short.in_(finished)).count()
+done = db.query(Fixture).filter(Fixture.id > 0, Fixture.status_short.in_(finished), Fixture.sub_data_synced == True).count()
 db.close()
 print(f"[{started.strftime('%H:%M:%S')}] 完赛 {total} 场, 已完成 {done}, 待处理 {total - done}")
 

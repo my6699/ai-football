@@ -13,6 +13,14 @@ class Settings(BaseSettings):
     api_football_key: str = ""
     api_football_base_url: str = ""
 
+    # football-data.co.uk（免费 CSV 数据源，无需 key）
+    # 用于回填历史比赛与统计，节省 API-Football 的每日配额
+    football_data_base_url: str = "https://www.football-data.co.uk/mmz4281"
+
+    # Understat（免费真实 xG 数据源，无需 key）
+    # 用于回填 fixture_statistics.expected_goals，供 B 组 xg 特征使用
+    understat_base_url: str = "https://understat.com/getLeagueData"
+
     # DeepSeek
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com/v1"

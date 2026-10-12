@@ -24,6 +24,7 @@ def upgrade() -> None:
         sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
         sa.Column('phone', sa.String(20), nullable=False),
         sa.Column('username', sa.String(100), nullable=True),
+        sa.Column('password_hash', sa.String(255), nullable=True),
         sa.Column('role', sa.String(20), server_default='user', nullable=True),
         sa.Column('vip_expires_at', sa.DateTime(), nullable=True),
         sa.Column('avatar', sa.String(500), nullable=True),

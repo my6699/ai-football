@@ -38,6 +38,26 @@ def _upsert_fixture(db: Session, row: dict) -> Fixture | None:
 
     obj = db.query(Fixture).filter(Fixture.id == fid).first()
     if obj is None:
+        # 外部数据源（football-data.co.uk / Understat）可能已经用「确定性负数 ID」
+        # 建过这场比赛。若此时再按 API-Football 的正数 ID 插一条，同一场比赛就会有
+        # 两行，既污染训练集、也会让 xG/统计对不上。这里按自然键
+        # (league_id, season, home_id, away_id) 去重：命中则复用已有行。
+        lid = league_raw.get("id")
+        season = league_raw.get("season")
+        hid = home_raw.get("id")
+        aid = away_raw.get("id")
+        if None not in (lid, season, hid, aid):
+            obj = (
+                db.query(Fixture)
+                .filter(
+                    Fixture.league_id == lid,
+                    Fixture.season == season,
+                    Fixture.home_id == hid,
+                    Fixture.away_id == aid,
+                )
+                .first()
+            )
+    if obj is None:
         obj = Fixture(id=fid)
         db.add(obj)
 
@@ -237,6 +257,11 @@ def sync_completed_sub_data(db: Session) -> None:
     fixtures = (
         db.query(Fixture)
         .filter(
+            # 只处理 API-Football 的比赛。外部数据源（football-data.co.uk / Understat）
+            # 建的比赛用负数合成 ID，在 API-Football 里不存在；若不排除，每场会白白
+            # 发起 4 次必然失败的请求且永远不会被标记完成，持续消耗每日配额
+            # （免费层仅 100 次/天），并让 tools/sync_fixtures.py 死循环。
+            Fixture.id > 0,
             Fixture.sub_data_synced == False,
             Fixture.status_short.in_(finished_statuses),
         )

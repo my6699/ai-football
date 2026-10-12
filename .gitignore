@@ -11,3 +11,11 @@ dist/
 logs/
 *.log
 *.sql
+
+# 本地密钥（明文 DeepSeek Key，禁止入库）
+dsAPI.txt
+
+# 本地运行产物与工具生成物
+downloaded_files/
+.trae-html-share-packages/
+*.lock

@@ -1,4 +1,6 @@
 import asyncio
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from loguru import logger
@@ -15,6 +17,9 @@ from app.services.standing_service import sync_standings
 from app.services.fixture_service import sync_fixtures, sync_live_fixtures
 from app.services.prediction_result_service import backfill_results
 from app.services.auto_predict_service import auto_predict
+from app.services.football_data_service import sync_football_data
+from app.services.understat_service import sync_understat
+from app.services.injury_service import sync_injuries
 
 router = APIRouter()
 
@@ -27,6 +32,9 @@ TASK_MAP = {
     "fixture_live":  ("赛程实时同步", sync_live_fixtures),
     "backfill_pred": ("预测结果回填", backfill_results),
     "auto_predict":  ("赛前自动预测", auto_predict),
+    "football_data_backfill": ("football-data.co.uk 回填", sync_football_data),
+    "understat_sync": ("Understat xG 回填", sync_understat),
+    "injury_sync":   ("伤停数据同步", sync_injuries),
 }
 
 
@@ -44,6 +52,52 @@ async def trigger_task(task_id: str):
     import asyncio
     await asyncio.to_thread(run_task_with_log, task_id, name, fn)
     return {"status": "ok", "message": f"{name} 已完成"}
+
+
+# 数据同步流水线：按依赖顺序执行
+# 顺序不能乱：football-data.co.uk 先建好 fixture，Understat 的 xG 才能挂上去
+SYNC_PIPELINE = [
+    "league_sync",
+    "team_sync",
+    "player_sync",
+    "standing_sync",
+    "fixture_daily",
+    "football_data_backfill",
+    "understat_sync",
+    "injury_sync",
+]
+PREDICT_STEPS = ["backfill_pred", "auto_predict"]
+
+
+@router.post("/scheduler/sync-all")
+async def sync_all(include_predict: bool = False):
+    """一键手动同步整条数据链路（开机后补数据用）。
+
+    include_predict=true 时，末尾追加「预测结果回填 + 赛前自动预测」。
+    """
+    return await asyncio.to_thread(_run_pipeline, include_predict)
+
+
+def _run_pipeline(include_predict: bool):
+    steps = SYNC_PIPELINE + (PREDICT_STEPS if include_predict else [])
+    results = []
+    for task_id in steps:
+        name, fn = TASK_MAP[task_id]
+        started = datetime.now()
+        try:
+            run_task_with_log(task_id, name, fn)
+            status, error = "success", None
+        except Exception as e:
+            status, error = "failed", str(e)
+        duration = round((datetime.now() - started).total_seconds(), 1)
+        results.append({"task_id": task_id, "name": name, "status": status,
+                        "error": error, "duration_seconds": duration})
+        logger.info(f"[SyncAll] {name}: {status}" + (f" - {error}" if error else ""))
+
+    ok = sum(1 for r in results if r["status"] == "success")
+    return {"status": "ok", "total": len(results), "success": ok,
+            "failed": len(results) - ok, "results": results}
+
 
 # ═══ 兼容旧接口 ═══
 @router.post("/scheduler/leagues/sync")

@@ -1,7 +1,10 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from app.core.log_config import setup_logger
@@ -12,6 +15,7 @@ from app.api.standings import router as standings_router
 from app.api.fixtures import router as fixtures_router
 from app.api.scheduler import router as scheduler_router
 from app.api.predictions import router as predictions_router
+from app.api.stats import router as stats_router
 from app.services.scheduler import init_scheduler, shutdown_scheduler
 
 # 初始化日志
@@ -61,6 +65,16 @@ app.include_router(standings_router, prefix="/api", tags=["Standings"])
 app.include_router(fixtures_router, prefix="/api", tags=["Fixtures"])
 app.include_router(scheduler_router, prefix="/api", tags=["Scheduler"])
 app.include_router(predictions_router, prefix="/api", tags=["Predictions"])
+app.include_router(stats_router, prefix="/api", tags=["Stats"])
+
+# 静态看板：启动脚本会打开 http://127.0.0.1:8000/
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.get("/", include_in_schema=False)
+async def dashboard():
+    return FileResponse(str(STATIC_DIR / "dashboard.html"))
 
 
 @app.get("/api/health")

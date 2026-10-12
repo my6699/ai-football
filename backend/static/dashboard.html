@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ai-football 数据看板</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#ffffff; --ink:#1c2430; --muted:#7b8794;
+    --line:#e6e9ee; --accent:#2f6fed; --accent-soft:#eaf1ff;
+    --home:#2f6fed; --draw:#8a94a6; --away:#e2574c;
+    --ok:#1f9d6b; --bad:#d64545; --warn:#d98b18;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:-apple-system,"Segoe UI","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--ink); display:flex; min-height:100vh; font-size:14px;
+  }
+  /* ── 侧边栏（二级菜单） ── */
+  .sidebar{
+    width:210px; flex:0 0 210px; background:#131a26; color:#c9d2e0;
+    display:flex; flex-direction:column; position:sticky; top:0; height:100vh;
+  }
+  .brand{padding:20px 18px; font-size:16px; font-weight:700; color:#fff; letter-spacing:.3px}
+  .brand small{display:block; font-weight:400; font-size:11px; color:#7b8794; margin-top:4px}
+  nav{flex:1; padding:6px 10px}
+  .nav-group{margin-bottom:14px}
+  .nav-label{font-size:11px; text-transform:uppercase; letter-spacing:.8px; color:#66738a; padding:8px 10px 6px}
+  .nav-item{
+    display:block; padding:9px 12px; border-radius:8px; cursor:pointer;
+    color:#c9d2e0; text-decoration:none; margin-bottom:2px; transition:.15s;
+  }
+  .nav-item:hover{background:#1e2836; color:#fff}
+  .nav-item.active{background:var(--accent); color:#fff; font-weight:600}
+  .sidebar-foot{padding:14px 16px; font-size:11px; color:#66738a; border-top:1px solid #1e2836}
+  .dot{display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--ok); margin-right:6px}
+  .dot.off{background:var(--bad)}
+
+  /* ── 主区 ── */
+  main{flex:1; padding:22px 26px; max-width:1180px}
+  header.top{display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; gap:16px; flex-wrap:wrap}
+  header.top h1{font-size:20px}
+  header.top .sub{color:var(--muted); font-size:12px; margin-top:3px}
+  .actions{display:flex; gap:8px; align-items:center}
+  button, input[type=date]{
+    font:inherit; padding:8px 13px; border:1px solid var(--line); border-radius:8px;
+    background:#fff; color:var(--ink); cursor:pointer;
+  }
+  button.primary{background:var(--accent); color:#fff; border-color:var(--accent)}
+  button:hover{filter:brightness(.97)}
+
+  /* ── 卡片 ── */
+  .grid{display:grid; gap:14px}
+  .grid.k4{grid-template-columns:repeat(auto-fit,minmax(165px,1fr))}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px}
+  .stat .label{color:var(--muted); font-size:12px; margin-bottom:8px}
+  .stat .value{font-size:26px; font-weight:700; letter-spacing:-.5px}
+  .stat .value small{font-size:13px; font-weight:500; color:var(--muted); margin-left:4px}
+  .stat .hint{font-size:11px; color:var(--muted); margin-top:6px}
+
+  h2.sec{font-size:15px; margin:24px 0 12px; display:flex; align-items:center; gap:8px}
+  h2.sec::before{content:""; width:3px; height:15px; background:var(--accent); border-radius:2px}
+
+  table{width:100%; border-collapse:collapse; font-size:13px}
+  th,td{padding:9px 10px; text-align:left; border-bottom:1px solid var(--line)}
+  th{color:var(--muted); font-weight:600; font-size:12px}
+  tbody tr:last-child td{border-bottom:none}
+
+  /* ── 预测卡 ── */
+  .pred{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:15px 16px; margin-bottom:12px}
+  .pred-head{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; flex-wrap:wrap}
+  .pred-league{font-size:12px; color:var(--muted)}
+  .teams{display:flex; align-items:center; gap:12px; font-size:16px; font-weight:600; margin-bottom:12px}
+  .teams .vs{color:var(--muted); font-weight:400; font-size:12px}
+  .badge{font-size:11px; padding:2px 8px; border-radius:20px; background:#eef1f5; color:var(--muted)}
+  .badge.live{background:#fff3e0; color:var(--warn)}
+  .badge.ft{background:#e9f6f0; color:var(--ok)}
+  .badge.ns{background:var(--accent-soft); color:var(--accent)}
+  .badge.hit{background:#e9f6f0; color:var(--ok)}
+  .badge.miss{background:#fdecec; color:var(--bad)}
+
+  .prob-row{display:flex; gap:6px; margin-bottom:10px}
+  .prob{flex:1; text-align:center; padding:8px 4px; border-radius:8px; background:#f7f8fa}
+  .prob .k{font-size:11px; color:var(--muted)}
+  .prob .v{font-size:15px; font-weight:700; margin-top:3px}
+  .prob.h .v{color:var(--home)} .prob.d .v{color:var(--draw)} .prob.a .v{color:var(--away)}
+
+  .llm{background:var(--accent-soft); border-radius:9px; padding:11px 12px; font-size:13px}
+  .llm .verdict{font-weight:700; font-size:14px}
+  .llm .meta{display:flex; gap:14px; flex-wrap:wrap; margin-top:7px; color:#3c4a5e; font-size:12px}
+  .llm .meta b{color:var(--ink)}
+  .llm .brief{margin-top:8px; color:#41506a; line-height:1.55}
+  .llm .empty{color:var(--muted)}
+
+  .result{margin-top:10px; font-size:13px; display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+  .result .score{font-weight:700; font-size:15px}
+  .chips{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px}
+  .muted{color:var(--muted)}
+  .empty-box{background:var(--card); border:1px dashed var(--line); border-radius:12px; padding:36px; text-align:center; color:var(--muted)}
+  .pager{display:flex; gap:10px; align-items:center; justify-content:center; margin:18px 0}
+  .pager span{color:var(--muted); font-size:12px}
+  .loading{color:var(--muted); padding:24px; text-align:center}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand">⚽ ai-football<small>数据与预测看板</small></div>
+  <nav>
+    <div class="nav-group">
+      <div class="nav-label">实时看板</div>
+      <a class="nav-item active" data-view="overview">数据总览</a>
+      <a class="nav-item" data-view="daily">每日预测</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label">历史记录</div>
+      <a class="nav-item" data-view="history">历史预测</a>
+    </div>
+  </nav>
+  <div class="sidebar-foot" id="serverStatus"><span class="dot"></span>连接中…</div>
+</aside>
+
+<main>
+  <header class="top">
+    <div>
+      <h1 id="viewTitle">数据总览</h1>
+      <div class="sub" id="viewSub">数据库规模、预测命中率与定时任务状态</div>
+    </div>
+    <div class="actions">
+      <input type="date" id="datePicker" hidden>
+      <button class="primary" id="refreshBtn">刷新</button>
+    </div>
+  </header>
+
+  <section id="view-overview"></section>
+  <section id="view-daily" hidden></section>
+  <section id="view-history" hidden></section>
+</main>
+
+<script>
+const API = "";
+const $ = (s) => document.querySelector(s);
+const views = {
+  overview: { title: "数据总览", sub: "数据库规模、预测命中率与定时任务状态" },
+  daily:    { title: "每日预测", sub: "所选日期的赛前预测（XGBoost + DeepSeek）" },
+  history:  { title: "历史预测", sub: "过往预测与实际结果的对照" },
+};
+let current = "overview";
+let dailyDate = new Date().toISOString().slice(0, 10);
+let historyPage = 1;
+
+/* ── 工具 ── */
+const esc = (s) => (s == null ? "" : String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])));
+const pctOf = (v) => (v == null ? "—" : Math.round(v * 100) + "%");
+const fmtTime = (s) => { if (!s) return "—"; const d = new Date(s); return d.toLocaleString("zh-CN", { hour12: false }); };
+const statusBadge = (s) => {
+  const map = { NS: ["ns", "未开赛"], FT: ["ft", "已结束"], "1H": ["live", "上半场"], "2H": ["live", "下半场"], HT: ["live", "中场"] };
+  const [cls, txt] = map[s] || ["", s || "—"];
+  return `<span class="badge ${cls}">${esc(txt)}</span>`;
+};
+const hitBadge = (v, label) => v == null ? "" : `<span class="badge ${v ? "hit" : "miss"}">${esc(label)} ${v ? "✓" : "✗"}</span>`;
+
+async function api(path) {
+  const r = await fetch(API + path);
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+
+function setStatus(ok) {
+  $("#serverStatus").innerHTML = ok
+    ? '<span class="dot"></span>服务在线'
+    : '<span class="dot off"></span>服务离线';
+}
+
+/* ── 数据总览 ── */
+async function renderOverview() {
+  const el = $("#view-overview");
+  el.innerHTML = '<div class="loading">加载中…</div>';
+  let s;
+  try { s = await api("/api/stats"); setStatus(true); }
+  catch (e) { el.innerHTML = `<div class="empty-box">读取数据失败：${esc(e.message)}</div>`; setStatus(false); return; }
+
+  const p = s.predictions;
+  el.innerHTML = `
+    <div class="grid k4">
+      <div class="card stat"><div class="label">启用联赛</div><div class="value">${s.leagues}</div></div>
+      <div class="card stat"><div class="label">球队</div><div class="value">${s.teams}</div></div>
+      <div class="card stat"><div class="label">比赛总数</div><div class="value">${s.fixtures.total}<small>场</small></div>
+        <div class="hint">已结束 ${s.fixtures.finished} · 未开赛 ${s.fixtures.upcoming}</div></div>
+      <div class="card stat"><div class="label">预测总数</div><div class="value">${p.total}<small>条</small></div>
+        <div class="hint">已评估 ${p.evaluated} 条</div></div>
+    </div>
+
+    <h2 class="sec">预测命中率（已评估样本）</h2>
+    <div class="grid k4">
+      <div class="card stat"><div class="label">胜平负</div><div class="value">${p.win_acc ?? "—"}${p.win_acc == null ? "" : "<small>%</small>"}</div></div>
+      <div class="card stat"><div class="label">大小球</div><div class="value">${p.ou_acc ?? "—"}${p.ou_acc == null ? "" : "<small>%</small>"}</div></div>
+      <div class="card stat"><div class="label">让球</div><div class="value">${p.handicap_acc ?? "—"}${p.handicap_acc == null ? "" : "<small>%</small>"}</div></div>
+      <div class="card stat"><div class="label">比分(Top3)</div><div class="value">${p.top3_acc ?? "—"}${p.top3_acc == null ? "" : "<small>%</small>"}</div></div>
+    </div>
+    ${p.evaluated === 0 ? '<div class="hint" style="margin-top:10px">暂无已评估样本 —— 等比赛结束、结果回填后才会出现命中率。</div>' : ""}
+
+    <h2 class="sec">定时任务</h2>
+    <div class="card" style="padding:6px 10px">
+      <table>
+        <thead><tr><th>任务</th><th>状态</th><th>上次执行</th><th>下次执行</th></tr></thead>
+        <tbody>
+          ${s.tasks.map(t => `<tr>
+            <td>${esc(t.name)}<div class="muted" style="font-size:11px">${esc(t.task_id)}</div></td>
+            <td>${t.is_enabled ? '<span class="badge hit">启用</span>' : '<span class="badge miss">停用</span>'}</td>
+            <td class="muted">${fmtTime(t.last_run)}</td>
+            <td class="muted">${fmtTime(t.next_run)}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+/* ── 预测卡 ── */
+function predCard(p) {
+  const b = p.basic, x = p.xgb || {}, l = p.llm || {}, r = p.result;
+  const top3 = Array.isArray(x.top3) ? x.top3.map(t => typeof t === "string" ? t : (t && (t.score || t.s)) || "").filter(Boolean) : [];
+  const hasLLM = l.win || l.score || l.brief;
+  return `
+  <div class="pred">
+    <div class="pred-head">
+      <div class="pred-league">${esc(b.league_name || "未知联赛")} · ${fmtTime(b.match_date)}</div>
+      ${statusBadge(b.status_short)}
+    </div>
+    <div class="teams">
+      <span>${esc(b.home_name)}</span><span class="vs">VS</span><span>${esc(b.away_name)}</span>
+    </div>
+
+    <div class="prob-row">
+      <div class="prob h"><div class="k">主胜</div><div class="v">${pctOf(x.prob && x.prob.home)}</div></div>
+      <div class="prob d"><div class="k">平局</div><div class="v">${pctOf(x.prob && x.prob.draw)}</div></div>
+      <div class="prob a"><div class="k">客胜</div><div class="v">${pctOf(x.prob && x.prob.away)}</div></div>
+    </div>
+    <div class="muted" style="font-size:12px; margin-bottom:10px">
+      大2.5 ${x.over25 ? pctOf(x.over25.over) : "—"}
+      · λ ${x.lambda ? `${(x.lambda.home ?? 0).toFixed(2)} / ${(x.lambda.away ?? 0).toFixed(2)}` : "—"}
+      · 模型组 ${esc(x.model_group || "—")}
+      ${top3.length ? ` · Top3 比分 ${top3.map(esc).join("、")}` : ""}
+    </div>
+
+    <div class="llm">
+      ${hasLLM ? `
+        <div class="verdict">${esc(l.win || "—")} ${l.win_pct ? `<span class="muted" style="font-weight:400">信心 ${esc(l.win_pct)}</span>` : ""}</div>
+        <div class="meta">
+          <span>比分 <b>${esc(l.score || "—")}</b></span>
+          <span>让球 <b>${esc(l.handicap_num || "—")} ${esc(l.handicap_team || "")} ${esc(l.handicap_pct || "")}</b></span>
+          <span>大小球 <b>${esc(l.ou_line || "—")} ${esc(l.ou_type || "")} ${esc(l.ou_pct || "")}</b></span>
+        </div>
+        ${l.brief ? `<div class="brief">${esc(l.brief)}</div>` : ""}
+      ` : '<div class="empty">暂无 LLM 分析（可能未配置 DeepSeek Key 或预测未完成）</div>'}
+    </div>
+
+    ${r ? `<div class="result">
+        <span>实际比分</span><span class="score">${esc(r.score)}</span>
+        <div class="chips">
+          ${hitBadge(r.win_correct, "胜平负")}
+          ${hitBadge(r.over25_correct, "大小球")}
+          ${hitBadge(r.handicap_correct, "让球")}
+          ${hitBadge(r.top3_correct, "比分")}
+        </div>
+      </div>` : ""}
+  </div>`;
+}
+
+/* ── 每日预测 ── */
+async function renderDaily() {
+  const el = $("#view-daily");
+  el.innerHTML = '<div class="loading">加载中…</div>';
+  try {
+    const d = await api(`/api/predictions?date=${dailyDate}&page_size=100`);
+    setStatus(true);
+    if (!d.data.length) {
+      el.innerHTML = `<div class="empty-box">${dailyDate} 暂无预测<br><span style="font-size:12px">未开赛比赛会在每天 12:00 自动预测，也可手动触发</span></div>`;
+      return;
+    }
+    el.innerHTML = `<div class="muted" style="margin-bottom:12px">共 ${d.total} 条预测</div>` + d.data.map(predCard).join("");
+  } catch (e) {
+    el.innerHTML = `<div class="empty-box">读取失败：${esc(e.message)}</div>`; setStatus(false);
+  }
+}
+
+/* ── 历史预测 ── */
+async function renderHistory() {
+  const el = $("#view-history");
+  el.innerHTML = '<div class="loading">加载中…</div>';
+  try {
+    const d = await api(`/api/predictions?page=${historyPage}&page_size=20`);
+    setStatus(true);
+    if (!d.data.length) { el.innerHTML = '<div class="empty-box">暂无历史预测</div>'; return; }
+    const pages = Math.max(1, Math.ceil(d.total / d.page_size));
+    el.innerHTML =
+      `<div class="muted" style="margin-bottom:12px">共 ${d.total} 条 · 第 ${d.page}/${pages} 页</div>` +
+      d.data.map(predCard).join("") +
+      `<div class="pager">
+        <button ${d.page <= 1 ? "disabled" : ""} onclick="gotoHistory(${d.page - 1})">上一页</button>
+        <span>${d.page} / ${pages}</span>
+        <button ${d.page >= pages ? "disabled" : ""} onclick="gotoHistory(${d.page + 1})">下一页</button>
+      </div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="empty-box">读取失败：${esc(e.message)}</div>`; setStatus(false);
+  }
+}
+window.gotoHistory = (p) => { historyPage = p; renderHistory(); };
+
+/* ── 视图切换 ── */
+function switchView(view) {
+  current = view;
+  document.querySelectorAll(".nav-item").forEach(a => a.classList.toggle("active", a.dataset.view === view));
+  $("#viewTitle").textContent = views[view].title;
+  $("#viewSub").textContent = views[view].sub;
+  $("#datePicker").hidden = view !== "daily";
+  for (const v of ["overview", "daily", "history"]) $("#view-" + v).hidden = (v !== view);
+  render();
+}
+function render() {
+  if (current === "overview") renderOverview();
+  else if (current === "daily") renderDaily();
+  else renderHistory();
+}
+
+document.querySelectorAll(".nav-item").forEach(a => a.addEventListener("click", () => switchView(a.dataset.view)));
+$("#refreshBtn").addEventListener("click", render);
+$("#datePicker").addEventListener("change", (e) => { dailyDate = e.target.value; renderDaily(); });
+$("#datePicker").value = dailyDate;
+
+switchView("overview");
+</script>
+</body>
+</html>

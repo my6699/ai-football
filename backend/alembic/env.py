@@ -11,8 +11,21 @@ from app.core.config import settings
 from app.db.base import Base
 
 # 导入所有模型，确保 autogenerate 能检测到
+# 注意：原版只导入了 League/Season/Team/Venue，导致 Player/Standing/Fixture/Injury
+# 等表在 autogenerate 时被漏掉。这里改为导入 app.models 包（其 __init__ 汇总了全部模型）。
+import app.models  # noqa: F401
 from app.models.league import League, Season  # noqa: F401
 from app.models.team import Team, Venue  # noqa: F401
+from app.models.player import Player, PlayerStats  # noqa: F401
+from app.models.standing import Standing  # noqa: F401
+from app.models.fixture import (  # noqa: F401
+    Fixture,
+    FixtureEvent,
+    FixtureLineup,
+    FixturePlayerStat,
+    FixtureStatistic,
+)
+from app.models.injury import Injury  # noqa: F401
 
 config = context.config
 
